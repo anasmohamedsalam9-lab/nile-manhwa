@@ -638,6 +638,7 @@ window.addEventListener('load', function() {
         });
         window.db = firebase.firestore();
         window._dbReady = true;
+        loadChaptersFromFirestore();
       } catch(e){ window._dbReady=false; }
     };
     document.head.appendChild(s2);
@@ -969,8 +970,10 @@ function admUpload(){
   Promise.all(uploads).then(function(){
     m.pages[ch]=urls;
     if(!m.chs.find(function(c){return c.n===ch;})) m.chs.unshift({n:ch,t:'الآن'});
+    return saveChapterToFirestore(mid,ch,urls);
+  }).then(function(){
     admShowProgress(false);
-    admShowOk('✅ تم رفع '+urls.length+' صورة للفصل '+ch+' من '+m.ar+' بنجاح!');
+    admShowOk('✅ تم رفع '+urls.length+' صورة للفصل '+ch+' من '+m.ar+' وحُفظ بشكل دائم! 🎉');
     btn.disabled=false;btn.textContent='⬆️ رفع الفصل';
     admFiles=[];
     document.getElementById('adm-files').value='';
@@ -1031,6 +1034,8 @@ function admUploadMulti(){
       return Promise.all(uploads).then(function(){
         m.pages[ch.n]=urls;
         if(!m.chs.find(function(c){return c.n===ch.n;})) m.chs.unshift({n:ch.n,t:'الآن'});
+        return saveChapterToFirestore(mid,ch.n,urls);
+      }).then(function(){
         document.getElementById('adm-ch-status-'+ch.n).textContent='✅ تم!';
         document.getElementById('adm-ch-status-'+ch.n).className='adm-chapter-status done';
       }).catch(function(){
@@ -1051,6 +1056,29 @@ function admUploadMulti(){
     admShowErr('❌ حدث خطأ في بعض الفصول');
     btn.disabled=false;btn.textContent='⬆️ رفع كل الفصول';
   });
+}
+
+/* ====== FIRESTORE SAVE/LOAD ====== */
+function saveChapterToFirestore(mangaId,chNum,urls){
+  if(!window._dbReady||!window.db)return Promise.resolve();
+  return window.db.collection('chapters').doc('m'+mangaId+'_ch'+chNum).set({
+    mangaId:mangaId,chapter:chNum,pages:urls,updatedAt:new Date().toISOString()
+  });
+}
+function loadChaptersFromFirestore(){
+  if(!window._dbReady||!window.db)return;
+  window.db.collection('chapters').get().then(function(snap){
+    snap.forEach(function(doc){
+      var data=doc.data();
+      var m=DB.find(function(x){return x.id===data.mangaId;});
+      if(m&&data.pages&&data.pages.length){
+        m.pages[data.chapter]=data.pages;
+        if(!m.chs.find(function(c){return c.n===data.chapter;}))
+          m.chs.unshift({n:data.chapter,t:'مرفوع'});
+      }
+    });
+    bHero();bTop();bLatest();bG(DB,'mg');bG(DB,'lg');
+  }).catch(function(){});
 }
 </script>
 </body>
